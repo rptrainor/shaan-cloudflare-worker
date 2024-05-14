@@ -80,7 +80,6 @@ async function fetchArticlesFromAPI(env: Env): Promise<Article[]> {
     const data = await response.json() as ApiResponse;
     return data.articles;
   } catch (error) {
-    console.error('Failed to fetch articles from API:', error);
     throw error;  // Re-throw to handle it in the calling function
   }
 }
@@ -92,7 +91,6 @@ async function storeArticlesInKV(articles: Article[], env: Env): Promise<void> {
     );
     await Promise.all(promises);
   } catch (error) {
-    console.error('Failed to store articles in KV:', error);
     throw error;  // Re-throw to handle it in the calling function
   }
 }
@@ -105,7 +103,6 @@ async function fetchArticleList(env: Env): Promise<Response> {
     }
     return new Response(summary, { headers: { 'content-type': 'application/json;charset=UTF-8' } });
   } catch (error) {
-    console.error('Failed to fetch article list:', error);
     return new Response('Failed to fetch article list', { status: 500 });
   }
 }
@@ -118,7 +115,6 @@ async function fetchArticleBySlug(slug: string, env: Env): Promise<Response> {
     }
     return new Response(article, { headers: { 'content-type': 'application/json;charset=UTF-8' } });
   } catch (error) {
-    console.error(`Failed to fetch article by slug (${slug}):`, error);
     return new Response('Internal Server Error', { status: 500 });
   }
 }
@@ -136,7 +132,6 @@ async function storeArticleListSummary(articles: Article[], env: Env): Promise<v
     })));
     await env.ARTICLES_KV.put('articles-summary', summary);
   } catch (error) {
-    console.error('Failed to store article list summary:', error);
     throw error;
   }
 }
