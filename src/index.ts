@@ -35,17 +35,23 @@ interface Env {
   API_SERVER_BASE_URL: string;
 }
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type'
+}
+
 async function updateKVStore(env: Env): Promise<Response> {
   try {
     const articles = await fetchArticlesFromAPI(env);
     await storeArticlesInKV(articles, env);
     await storeArticleListSummary(articles, env);
-    return new Response('KV Store Updated', { status: 200 });
+    return new Response('KV Store Updated', { status: 200, headers: corsHeaders });
   } catch (error) {
     if (error instanceof Error) {
-      return new Response('Error updating KV Store: ' + error.message, { status: 500 });
+      return new Response('Error updating KV Store: ' + error.message, { status: 500, headers: corsHeaders });
     } else {
-      return new Response('An unknown error occurred', { status: 500 });
+      return new Response('An unknown error occurred', { status: 500, headers: corsHeaders });
     }
   }
 }
@@ -53,6 +59,10 @@ async function updateKVStore(env: Env): Promise<Response> {
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+
+    if (request.method === 'OPTIONS') {
+      return handleOptions(request);
+    }
 
     if (url.pathname === '/articles') {
       return fetchArticleList(env);
@@ -67,9 +77,13 @@ export default {
       return updateKVStore(env);
     }
 
-    return new Response('Invalid endpoint', { status: 404 });
+    return new Response('Invalid endpoint', { status: 404, headers: corsHeaders });
   }
 };
+
+function handleOptions(request: Request): Response {
+  return new Response(null, { headers: corsHeaders });
+}
 
 async function fetchArticlesFromAPI(env: Env): Promise<Article[]> {
   try {
@@ -101,9 +115,9 @@ async function fetchArticleList(env: Env): Promise<Response> {
     if (!summary) {
       throw new Error('No articles summary found in KV');
     }
-    return new Response(summary, { headers: { 'content-type': 'application/json;charset=UTF-8' } });
+    return new Response(summary, { headers: { 'content-type': 'application/json;charset=UTF-8', ...corsHeaders } });
   } catch (error) {
-    return new Response('Failed to fetch article list', { status: 500 });
+    return new Response('Failed to fetch article list', { status: 500, headers: corsHeaders });
   }
 }
 
@@ -111,11 +125,11 @@ async function fetchArticleBySlug(slug: string, env: Env): Promise<Response> {
   try {
     const article = await env.ARTICLES_KV.get(`article-${slug}`);
     if (!article) {
-      return new Response('Article not found', { status: 404 });
+      return new Response('Article not found', { status: 404, headers: corsHeaders });
     }
-    return new Response(article, { headers: { 'content-type': 'application/json;charset=UTF-8' } });
+    return new Response(article, { headers: { 'content-type': 'application/json;charset=UTF-8', ...corsHeaders } });
   } catch (error) {
-    return new Response('Internal Server Error', { status: 500 });
+    return new Response('Internal Server Error', { status: 500, headers: corsHeaders });
   }
 }
 
