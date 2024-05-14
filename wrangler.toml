@@ -19,9 +19,8 @@ kv_namespaces = [
 # - https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
 # Note: Use secrets to store sensitive data.
 # - https://developers.cloudflare.com/workers/configuration/secrets/
-# [vars]
-# ARTICLES_KV = "ARTICLES_KV"
-
+[vars]
+API_SERVER_BASE_URL = "https://xsbmud3qw6ewsl266xeb7dwwtu0vvzam.lambda-url.us-east-2.on.aws"
 # Bind the Workers AI model catalog. Run machine learning models, powered by serverless GPUs, on Cloudflare’s global network
 # Docs: https://developers.cloudflare.com/workers/wrangler/configuration/#workers-ai
 # [ai]

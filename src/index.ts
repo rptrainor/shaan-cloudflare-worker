@@ -30,17 +30,68 @@ interface ApiResponse {
   articles: Article[];
 }
 
+interface Env {
+  API_SERVER_BASE_URL: string;
+}
+
 addEventListener('fetch', event => {
   event.respondWith(handleRequest(event.request));
 });
 
 async function handleRequest(request: Request): Promise<Response> {
   const url = new URL(request.url);
-  if (url.pathname.startsWith('/update-kv')) {
+  if (url.pathname === '/articles') {
+    return fetchArticleList();
+  } else if (url.pathname.startsWith('/articles/')) {
+    const slug = url.pathname.split('/')[2]; // Assumes URL pattern is /articles/{slug}
+    return fetchArticleBySlug(slug);
+  } else if (url.pathname.startsWith('/update-kv')) {
     return updateKVStore();
   }
   return new Response('Invalid endpoint', { status: 404 });
 }
+
+async function storeArticlesInKV(articles: Article[]): Promise<void> {
+  // Store each article by its slug
+  const articlePromises = articles.map(article =>
+    ARTICLES_KV.put(`article-${article.slug}`, JSON.stringify(article))
+  );
+
+  // Prepare a summary list of articles for listing purposes
+  const articleSummaries = articles.map(article => ({
+    id: article.id,
+    slug: article.slug,
+    title: article.title,
+    description: article.description,
+    authorFullName: article.authorFullName,
+    coverImgSrc: article.coverImgSrc,
+    publishedDate: article.publishedDate,
+    isActive: article.isActive
+  }));
+
+  // Store the summary list under a specific key
+  const summaryPromise = ARTICLES_KV.put('articles-summary', JSON.stringify(articleSummaries));
+
+  // Wait for all promises to resolve
+  await Promise.all([...articlePromises, summaryPromise]);
+}
+
+async function fetchArticleList(): Promise<Response> {
+  const summary = await ARTICLES_KV.get('articles-summary');
+  return new Response(summary, {
+    headers: { 'content-type': 'application/json;charset=UTF-8' }
+  });
+}
+
+async function fetchArticleBySlug(slug: string): Promise<Response> {
+  const article = await ARTICLES_KV.get(`article-${slug}`);
+  return article
+    ? new Response(article, {
+      headers: { 'content-type': 'application/json;charset=UTF-8' }
+    })
+    : new Response('Article not found', { status: 404 });
+}
+
 
 async function updateKVStore(): Promise<Response> {
   try {
@@ -58,14 +109,7 @@ async function updateKVStore(): Promise<Response> {
 }
 
 async function fetchArticlesFromAPI(): Promise<Article[]> {
-  const response = await fetch('https://xsbmud3qw6ewsl266xeb7dwwtu0vvzam.lambda-url.us-east-2.on.aws/api/articles');
+  const response = await fetch(`${env.API_SERVER_BASE_URL}/api/articles`);
   const data = await response.json() as ApiResponse;
   return data.articles;
-}
-
-async function storeArticlesInKV(articles: Article[]): Promise<void> {
-  const promises = articles.map(article => {
-    return ARTICLES_KV.put(article.slug, JSON.stringify(article));
-  });
-  await Promise.all(promises);
 }
