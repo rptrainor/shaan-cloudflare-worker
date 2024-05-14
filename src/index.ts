@@ -35,58 +35,6 @@ interface Env {
   API_SERVER_BASE_URL: string;
 }
 
-export default {
-  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    const url = new URL(request.url);
-    if (url.pathname === '/articles') {
-      return fetchArticleList(env);
-    } else if (url.pathname.startsWith('/articles/')) {
-      const slug = url.pathname.split('/')[2]; // Assumes URL pattern is /articles/{slug}
-      return fetchArticleBySlug(slug, env);
-    } else if (url.pathname.startsWith('/update-kv')) {
-      return updateKVStore(env);
-    }
-    return new Response('Invalid endpoint', { status: 404 });
-  }
-};
-
-async function fetchArticlesFromAPI(env: Env): Promise<Article[]> {
-  const response = await fetch(`${env.API_SERVER_BASE_URL}/api/articles`);
-  const data = await response.json() as ApiResponse;
-  return data.articles;
-}
-
-async function storeArticlesInKV(articles: Article[], env: Env): Promise<void> {
-  const promises = articles.map(article =>
-    env.ARTICLES_KV.put(`article-${article.slug}`, JSON.stringify(article))
-  );
-  await Promise.all(promises);
-}
-
-async function fetchArticleList(env: Env): Promise<Response> {
-  const summary = await env.ARTICLES_KV.get('articles-summary');
-  return new Response(summary, { headers: { 'content-type': 'application/json;charset=UTF-8' } });
-}
-
-async function fetchArticleBySlug(slug: string, env: Env): Promise<Response> {
-  const article = await env.ARTICLES_KV.get(`article-${slug}`);
-  return article ? new Response(article, { headers: { 'content-type': 'application/json;charset=UTF-8' } })
-    : new Response('Article not found', { status: 404 });
-}
-
-async function storeArticleListSummary(articles: Article[], env: Env): Promise<void> {
-  const summary = JSON.stringify(articles.map(article => ({
-    id: article.id,
-    slug: article.slug,
-    title: article.title,
-    description: article.description,
-    cover_img_src: article.cover_img_src,
-    cover_img_alt: article.cover_img_alt,
-    published_date: article.published_date
-  })));
-  await env.ARTICLES_KV.put('articles-summary', summary);
-}
-
 async function updateKVStore(env: Env): Promise<Response> {
   try {
     const articles = await fetchArticlesFromAPI(env);
@@ -99,5 +47,96 @@ async function updateKVStore(env: Env): Promise<Response> {
     } else {
       return new Response('An unknown error occurred', { status: 500 });
     }
+  }
+}
+
+export default {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    const url = new URL(request.url);
+
+    if (url.pathname === '/articles') {
+      return fetchArticleList(env);
+    }
+
+    if (url.pathname.startsWith('/articles/')) {
+      const slug = url.pathname.split('/')[2]; // Assumes URL pattern is /articles/{slug}
+      return fetchArticleBySlug(slug, env);
+    }
+
+    if (url.pathname.startsWith('/update-kv')) {
+      return updateKVStore(env);
+    }
+
+    return new Response('Invalid endpoint', { status: 404 });
+  }
+};
+
+async function fetchArticlesFromAPI(env: Env): Promise<Article[]> {
+  try {
+    const response = await fetch(`${env.API_SERVER_BASE_URL}/api/articles`);
+    if (!response.ok) {
+      throw new Error(`API responded with status ${response.status}`);
+    }
+    const data = await response.json() as ApiResponse;
+    return data.articles;
+  } catch (error) {
+    console.error('Failed to fetch articles from API:', error);
+    throw error;  // Re-throw to handle it in the calling function
+  }
+}
+
+async function storeArticlesInKV(articles: Article[], env: Env): Promise<void> {
+  try {
+    const promises = articles.map(article =>
+      env.ARTICLES_KV.put(`article-${article.slug}`, JSON.stringify(article))
+    );
+    await Promise.all(promises);
+  } catch (error) {
+    console.error('Failed to store articles in KV:', error);
+    throw error;  // Re-throw to handle it in the calling function
+  }
+}
+
+async function fetchArticleList(env: Env): Promise<Response> {
+  try {
+    const summary = await env.ARTICLES_KV.get('articles-summary');
+    if (!summary) {
+      throw new Error('No articles summary found in KV');
+    }
+    return new Response(summary, { headers: { 'content-type': 'application/json;charset=UTF-8' } });
+  } catch (error) {
+    console.error('Failed to fetch article list:', error);
+    return new Response('Failed to fetch article list', { status: 500 });
+  }
+}
+
+async function fetchArticleBySlug(slug: string, env: Env): Promise<Response> {
+  try {
+    const article = await env.ARTICLES_KV.get(`article-${slug}`);
+    if (!article) {
+      return new Response('Article not found', { status: 404 });
+    }
+    return new Response(article, { headers: { 'content-type': 'application/json;charset=UTF-8' } });
+  } catch (error) {
+    console.error(`Failed to fetch article by slug (${slug}):`, error);
+    return new Response('Internal Server Error', { status: 500 });
+  }
+}
+
+async function storeArticleListSummary(articles: Article[], env: Env): Promise<void> {
+  try {
+    const summary = JSON.stringify(articles.map(article => ({
+      id: article.id,
+      slug: article.slug,
+      title: article.title,
+      description: article.description,
+      cover_img_src: article.cover_img_src,
+      cover_img_alt: article.cover_img_alt,
+      published_date: article.published_date
+    })));
+    await env.ARTICLES_KV.put('articles-summary', summary);
+  } catch (error) {
+    console.error('Failed to store article list summary:', error);
+    throw error;
   }
 }
