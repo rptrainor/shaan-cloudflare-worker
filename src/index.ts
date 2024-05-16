@@ -38,9 +38,14 @@ interface Env {
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type'
-}
+  'Access-Control-Allow-Headers': 'Content-Type',
+};
 
+/**
+ * Updates the KV store with articles fetched from the API server.
+ * @param env - The environment object containing bindings and configurations.
+ * @returns Response indicating the result of the update operation.
+ */
 async function updateKVStore(env: Env): Promise<Response> {
   try {
     const articles = await fetchArticlesFromAPI(env);
@@ -48,11 +53,9 @@ async function updateKVStore(env: Env): Promise<Response> {
     await storeArticleListSummary(articles, env);
     return new Response('KV Store Updated', { status: 200, headers: corsHeaders });
   } catch (error) {
-    if (error instanceof Error) {
-      return new Response('Error updating KV Store: ' + error.message, { status: 500, headers: corsHeaders });
-    } else {
-      return new Response('An unknown error occurred', { status: 500, headers: corsHeaders });
-    }
+    console.error('Error updating KV Store:', error);
+    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+    return new Response(`Error updating KV Store: ${errorMessage}`, { status: 500, headers: corsHeaders });
   }
 }
 
@@ -61,7 +64,7 @@ export default {
     const url = new URL(request.url);
 
     if (request.method === 'OPTIONS') {
-      return handleOptions(request);
+      return handleOptions();
     }
 
     if (url.pathname === '/articles') {
@@ -81,34 +84,45 @@ export default {
   }
 };
 
-function handleOptions(request: Request): Response {
+/**
+ * Handles CORS preflight requests.
+ * @returns Response with CORS headers.
+ */
+function handleOptions(): Response {
   return new Response(null, { headers: corsHeaders });
 }
 
+/**
+ * Fetches articles from the API server.
+ * @param env - The environment object containing bindings and configurations.
+ * @returns Array of articles fetched from the API server.
+ */
 async function fetchArticlesFromAPI(env: Env): Promise<Article[]> {
-  try {
-    const response = await fetch(`${env.API_SERVER_BASE_URL}/api/articles`);
-    if (!response.ok) {
-      throw new Error(`API responded with status ${response.status}`);
-    }
-    const data = await response.json() as ApiResponse;
-    return data.articles;
-  } catch (error) {
-    throw error;  // Re-throw to handle it in the calling function
+  const response = await fetch(`${env.API_SERVER_BASE_URL}/api/articles`);
+  if (!response.ok) {
+    throw new Error(`API responded with status ${response.status}`);
   }
+  const data = await response.json() as ApiResponse;
+  return data.articles;
 }
 
+/**
+ * Stores articles in the KV store.
+ * @param articles - Array of articles to be stored.
+ * @param env - The environment object containing bindings and configurations.
+ */
 async function storeArticlesInKV(articles: Article[], env: Env): Promise<void> {
-  try {
-    const promises = articles.map(article =>
-      env.ARTICLES_KV.put(`article-${article.slug}`, JSON.stringify(article))
-    );
-    await Promise.all(promises);
-  } catch (error) {
-    throw error;  // Re-throw to handle it in the calling function
-  }
+  const promises = articles.map(article =>
+    env.ARTICLES_KV.put(`article-${article.slug}`, JSON.stringify(article))
+  );
+  await Promise.all(promises);
 }
 
+/**
+ * Fetches the list of articles from the KV store.
+ * @param env - The environment object containing bindings and configurations.
+ * @returns Response with the list of articles.
+ */
 async function fetchArticleList(env: Env): Promise<Response> {
   try {
     const summary = await env.ARTICLES_KV.get('articles-summary');
@@ -117,10 +131,17 @@ async function fetchArticleList(env: Env): Promise<Response> {
     }
     return new Response(summary, { headers: { 'content-type': 'application/json;charset=UTF-8', ...corsHeaders } });
   } catch (error) {
+    console.error('Failed to fetch article list:', error);
     return new Response('Failed to fetch article list', { status: 500, headers: corsHeaders });
   }
 }
 
+/**
+ * Fetches a single article by its slug from the KV store.
+ * @param slug - The slug of the article to fetch.
+ * @param env - The environment object containing bindings and configurations.
+ * @returns Response with the article data.
+ */
 async function fetchArticleBySlug(slug: string, env: Env): Promise<Response> {
   try {
     const article = await env.ARTICLES_KV.get(`article-${slug}`);
@@ -129,23 +150,25 @@ async function fetchArticleBySlug(slug: string, env: Env): Promise<Response> {
     }
     return new Response(article, { headers: { 'content-type': 'application/json;charset=UTF-8', ...corsHeaders } });
   } catch (error) {
+    console.error('Failed to fetch article:', error);
     return new Response('Internal Server Error', { status: 500, headers: corsHeaders });
   }
 }
 
+/**
+ * Stores the summary of articles in the KV store.
+ * @param articles - Array of articles to summarize and store.
+ * @param env - The environment object containing bindings and configurations.
+ */
 async function storeArticleListSummary(articles: Article[], env: Env): Promise<void> {
-  try {
-    const summary = JSON.stringify(articles.map(article => ({
-      id: article.id,
-      slug: article.slug,
-      title: article.title,
-      description: article.description,
-      cover_img_src: article.cover_img_src,
-      cover_img_alt: article.cover_img_alt,
-      published_date: article.published_date
-    })));
-    await env.ARTICLES_KV.put('articles-summary', summary);
-  } catch (error) {
-    throw error;
-  }
+  const summary = JSON.stringify(articles.map(article => ({
+    id: article.id,
+    slug: article.slug,
+    title: article.title,
+    description: article.description,
+    cover_img_src: article.cover_img_src,
+    cover_img_alt: article.cover_img_alt,
+    published_date: article.published_date
+  })));
+  await env.ARTICLES_KV.put('articles-summary', summary);
 }
